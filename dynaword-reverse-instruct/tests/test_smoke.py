@@ -14,20 +14,27 @@ from reverse_instruct.validation import validation_errors
 ROOT = Path(__file__).parents[1]
 
 
-def test_configs_and_prompts_load() -> None:
-    for language in ("fo", "is"):
-        config = load_config(ROOT / "configs" / f"{language}.yaml")
-        candidate = Candidate(
-            id="example_1",
-            source="example",
-            language=language,
-            domain_hint="encyclopedic",
-            source_context="Reference text.",
-            passage="A complete example passage.",
-        )
-        rendered = PromptTemplate(config.prompt_path).render(candidate)
-        assert "A complete example passage." in rendered
-        assert "$passage" not in rendered
+def test_config_and_prompt_load() -> None:
+    assert not (ROOT / "configs" / "is.yaml").exists()
+    assert not (ROOT / "prompts" / "is.md").exists()
+
+    config = load_config(ROOT / "configs" / "fo.yaml")
+    assert config.language.code == "fo"
+    assert config.language.name == "Faroese"
+    assert config.dataset.name == "danish-foundation-models/faroese-dynaword"
+
+    candidate = Candidate(
+        id="example_1",
+        source="example",
+        language="fo",
+        domain_hint="encyclopedic",
+        source_context="Reference text.",
+        passage="A complete example passage.",
+    )
+    rendered = PromptTemplate(config.prompt_path).render(candidate)
+    assert "føroyskt venjingartilfar" in rendered
+    assert "A complete example passage." in rendered
+    assert "$passage" not in rendered
 
 
 def test_make_passage_filters_and_truncates() -> None:
@@ -40,9 +47,9 @@ def test_make_passage_filters_and_truncates() -> None:
 
 
 def test_limit_is_distributed_across_sources() -> None:
-    config = load_config(ROOT / "configs" / "is.yaml")
+    config = load_config(ROOT / "configs" / "fo.yaml")
     limits = source_limits(config, total_limit=12)
-    assert set(limits.values()) == {2}
+    assert limits == {"wikipedia": 6, "faroese-blark-small": 6}
 
 
 def test_validation_accepts_valid_instruction() -> None:
@@ -56,11 +63,11 @@ def test_validation_accepts_valid_instruction() -> None:
     assert errors == []
 
 
-def test_validation_rejects_meta_reference() -> None:
+def test_validation_rejects_faroese_meta_reference() -> None:
     decision = GenerationDecision(
         accept=True,
         domain="encyclopedic",
-        instruction="Summarize the provided text in a clear and neutral style.",
+        instruction="Teksturin omanfyri skal takast samanum á greiðan og neutralan hátt.",
         reason="Complete passage.",
     )
     errors = validation_errors(decision, {"encyclopedic"}, set())
